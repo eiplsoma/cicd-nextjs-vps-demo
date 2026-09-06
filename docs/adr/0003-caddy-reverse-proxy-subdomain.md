@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted
+Superseded by [0005](0005-nginx-instead-of-caddy.md) — the target VPS turned
+out to already run nginx bound to 80/443 for other sites, discovered during
+go-live setup. Kept here for the record of why Caddy was the first choice.
 
 ## Context
 

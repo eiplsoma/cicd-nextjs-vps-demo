@@ -8,7 +8,6 @@ docs
 .env.*
 Dockerfile
 docker-compose.yml
-Caddyfile
 .dockerignore
 coverage
 tests

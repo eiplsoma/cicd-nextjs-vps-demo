@@ -1,23 +1,14 @@
 # Reference copy — editing this file has no effect on the running stack until
 # it's copied to /opt/cicd-demo on the VPS (see docs/RUNBOOK.md).
+#
+# No reverse proxy service here: the VPS already runs nginx for other sites,
+# bound to 80/443. TLS termination and the cicd-demo.woollydesign.hu vhost are
+# handled by that existing nginx (see docs/adr/0005-nginx-instead-of-caddy.md).
+# The app is bound only to localhost so nothing but that local nginx can reach
+# it directly.
 services:
   app:
     image: ghcr.io/eiplsoma/cicd-nextjs-vps-demo:latest
     restart: unless-stopped
-    expose:
-      - "3000"
-
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
-
-volumes:
-  caddy_data:
-  caddy_config:
+      - "127.0.0.1:3001:3000"

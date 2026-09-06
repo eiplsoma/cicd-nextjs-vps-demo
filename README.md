@@ -5,7 +5,7 @@
 A minimal, industry-standard CI/CD pipeline. Every push to `main` is linted,
 type-checked, unit-tested, built into a Docker image, published to GitHub
 Container Registry, and deployed over SSH to a Docker Compose stack on a
-DigitalOcean VPS — behind Caddy with automatic HTTPS.
+DigitalOcean VPS, reverse-proxied by the VPS's existing nginx.
 
 **Live:** https://cicd-demo.woollydesign.hu
 
@@ -20,7 +20,8 @@ DigitalOcean VPS — behind Caddy with automatic HTTPS.
 - Publishing versioned images (commit SHA + `latest`) to `ghcr.io`.
 - Push-based deployment: GitHub Actions SSHes into the target host and runs
   `docker compose pull && up -d` — no polling, no extra agent on the server.
-- Reverse proxy + automatic HTTPS via Caddy, fronting the app container.
+- The app container binds only to `127.0.0.1`, not a public port — the
+  VPS's existing nginx is the only thing that can reach it.
 - Secrets handled exclusively through GitHub Actions secrets, never committed.
 
 ## Architecture
@@ -35,9 +36,9 @@ GitHub Actions
   └─ deploy             (SSH → docker compose pull && up -d → smoke test)
                                         │
                                         ▼
-                    DigitalOcean VPS (Docker Compose)
-                    ├─ caddy   (reverse proxy, auto HTTPS)
-                    └─ app     (this Next.js container)
+                    DigitalOcean VPS (shared with other projects)
+                    ├─ nginx   (already running, owns 80/443, TLS via certbot)
+                    └─ app     (this container, bound to 127.0.0.1:3001)
                                         │
                           cicd-demo.woollydesign.hu
 ```
@@ -86,5 +87,5 @@ deploy. Reasoning for each of these is in `docs/adr/`.
 
 - Roll back to the previous image tag automatically if the smoke test fails.
 - Staging environment with PR-based preview deploys.
-- Traefik instead of Caddy (Docker-label-driven config).
+- Automate the nginx vhost + certbot cert as code instead of a manual VPS step.
 - Dependabot/Renovate for dependency updates.

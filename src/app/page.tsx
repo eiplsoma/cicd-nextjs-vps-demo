@@ -13,8 +13,8 @@ export default function Home() {
       <h1>This page deployed itself.</h1>
       <p>
         Every push to <code>main</code> runs through the pipeline below and
-        lands right here, on a Docker Compose stack behind Caddy on a
-        DigitalOcean VPS.
+        lands right here, in a Docker container on a DigitalOcean VPS,
+        reverse-proxied by nginx.
       </p>
       <ol>
         {PIPELINE_STAGES.map((stage) => (

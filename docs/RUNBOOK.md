@@ -1,7 +1,8 @@
 # Go-Live Runbook
 
 One-time steps to take this repo from "code on disk" to "live pipeline."
-Each step notes where it runs.
+Each step notes where it runs. DNS is done early (step 3) so it has time to
+propagate before the TLS certificate is requested in step 4.
 
 ## 1. Create the GitHub repo (local machine)
 
@@ -26,25 +27,37 @@ git push -u origin main
 | Secret | Value |
 | --- | --- |
 | `VPS_HOST` | your VPS's public IP or hostname |
-| `VPS_USER` | `deploy` (created in step 3) |
-| `VPS_SSH_KEY` | the *private* key generated in step 3 |
+| `VPS_USER` | `deploy` (created in step 4) |
+| `VPS_SSH_KEY` | the *private* key generated in step 4 |
 | `GHCR_TOKEN` | a classic PAT, scope `read:packages` only |
 
-## 3. VPS one-time setup (Termius, on the VPS — using your existing SSH access)
+## 3. DNS (domain registrar / DNS provider for woollydesign.hu)
+
+Add an A record:
+- Name: `cicd-demo`
+- Value: `<VPS_HOST>` (the VPS's public IPv4)
+
+DNS propagation can take a few minutes to a few hours — step 4's certbot
+invocation will fail if it hasn't propagated yet, so it's fine to start this
+step and come back to step 4 a bit later.
+
+## 4. VPS one-time setup (Termius, on the VPS — using your existing SSH access)
+
+This VPS is shared with other projects — it already runs nginx bound to
+80/443 and may already have Docker installed. Check before assuming a clean
+slate (see [ADR 0005](adr/0005-nginx-instead-of-caddy.md)).
 
 ```bash
-# Docker + Compose plugin
+# Docker + Compose plugin (skip if `docker --version` already works)
 curl -fsSL https://get.docker.com | sh
 
-# dedicated deploy user, in the docker group
+# dedicated deploy user, in the docker group (skip if it already exists)
 sudo adduser --disabled-password --gecos "" deploy
 sudo usermod -aG docker deploy
 
-# firewall
-sudo ufw allow OpenSSH
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw enable
+# check the firewall before touching it — this VPS likely already has
+# 22/80/443 open for its other sites; only add what's actually missing
+sudo ufw status verbose
 
 # app directory
 sudo mkdir -p /opt/cicd-demo
@@ -73,19 +86,41 @@ sudo chmod 600 /home/deploy/.ssh/authorized_keys
 Paste the contents of `./cicd_deploy_key` (the private half) into the
 `VPS_SSH_KEY` GitHub secret.
 
-Now that `deploy` accepts the new key, copy the compose files to the VPS using it:
+Now that `deploy` accepts the new key, copy the compose file to the VPS using it:
 
 ```bash
-scp -i ./cicd_deploy_key docker-compose.yml Caddyfile deploy@<VPS_HOST>:/opt/cicd-demo/
+scp -i ./cicd_deploy_key docker-compose.yml deploy@<VPS_HOST>:/opt/cicd-demo/
 ```
 
 Then delete both local key files (`cicd_deploy_key` and `cicd_deploy_key.pub`).
 
-## 4. DNS (domain registrar / DNS provider for woollydesign.hu)
+Add an nginx server block for the subdomain (as root/sudo on the VPS):
 
-Add an A record:
-- Name: `cicd-demo`
-- Value: `<VPS_HOST>` (the VPS's public IPv4)
+```bash
+sudo tee /etc/nginx/sites-available/cicd-demo.woollydesign.hu > /dev/null <<'EOF'
+server {
+    listen 80;
+    server_name cicd-demo.woollydesign.hu;
+
+    location / {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+EOF
+sudo ln -s /etc/nginx/sites-available/cicd-demo.woollydesign.hu /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Once DNS (step 3) has propagated, get a certificate — certbot's nginx plugin
+edits the server block above in place to add TLS and the HTTP→HTTPS redirect:
+
+```bash
+sudo certbot --nginx -d cicd-demo.woollydesign.hu
+```
 
 ## 5. Trigger the deploy (local machine)
 
