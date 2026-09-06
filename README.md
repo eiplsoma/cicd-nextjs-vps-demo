@@ -5,7 +5,8 @@
 A minimal, industry-standard CI/CD pipeline. Every push to `main` is linted,
 type-checked, unit-tested, built into a Docker image, published to GitHub
 Container Registry, and deployed over SSH to a Docker Compose stack on a
-DigitalOcean VPS, reverse-proxied by the VPS's existing nginx.
+DigitalOcean VPS, reverse-proxied by the VPS's existing nginx and fronted by
+Cloudflare (proxied DNS — the origin IP isn't publicly visible).
 
 **Live:** https://cicd-demo.woollydesign.hu
 
@@ -22,6 +23,12 @@ DigitalOcean VPS, reverse-proxied by the VPS's existing nginx.
   `docker compose pull && up -d` — no polling, no extra agent on the server.
 - The app container binds only to `127.0.0.1`, not a public port — the
   VPS's existing nginx is the only thing that can reach it.
+- The deploy job's health check runs from inside the SSH session against
+  `127.0.0.1`, not the public domain — it verifies the deploy itself, and
+  never depends on (or gets blocked by) DNS/CDN/proxy behavior in front.
+- Security headers (`X-Frame-Options`, `X-Content-Type-Options`,
+  `Referrer-Policy`, HSTS) and no version/framework disclosure
+  (`server_tokens off`, `poweredByHeader: false`).
 - Secrets handled exclusively through GitHub Actions secrets, never committed.
 
 ## Architecture
@@ -39,6 +46,10 @@ GitHub Actions
                     DigitalOcean VPS (shared with other projects)
                     ├─ nginx   (already running, owns 80/443, TLS via certbot)
                     └─ app     (this container, bound to 127.0.0.1:3001)
+                                        ▲
+                                        │
+                          Cloudflare (proxied — hides the origin IP)
+                                        ▲
                                         │
                           cicd-demo.woollydesign.hu
 ```
