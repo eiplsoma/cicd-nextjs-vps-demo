@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.github
+docs
+*.md
+.env
+.env.*
+Dockerfile
+docker-compose.yml
+Caddyfile
+.dockerignore
+coverage
+tests
