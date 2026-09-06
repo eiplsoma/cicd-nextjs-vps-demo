@@ -103,6 +103,10 @@ server {
     server_name cicd-demo.woollydesign.hu;
 
     location / {
+        add_header X-Frame-Options "DENY" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
         proxy_pass http://127.0.0.1:3001;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -116,11 +120,20 @@ sudo nginx -t && sudo systemctl reload nginx
 ```
 
 Once DNS (step 3) has propagated, get a certificate — certbot's nginx plugin
-edits the server block above in place to add TLS and the HTTP→HTTPS redirect:
+edits the server block above in place to add TLS and the HTTP→HTTPS redirect.
+Add `Strict-Transport-Security` (HSTS) only after this, directly to
+`/etc/nginx/sites-available/cicd-demo.woollydesign.hu`'s HTTPS (`listen 443
+ssl`) block — HSTS only makes sense once HTTPS actually exists, and Certbot
+doesn't add it for you:
 
 ```bash
 sudo certbot --nginx -d cicd-demo.woollydesign.hu
 ```
+
+A copy of the resulting config, with all four headers, is kept for reference
+at [`docs/nginx/cicd-demo.woollydesign.hu.conf`](nginx/cicd-demo.woollydesign.hu.conf) —
+it's not deployed by anything automatically, but keeps the live VPS config
+reproducible instead of existing only as an undocumented manual change.
 
 ## 5. Trigger the deploy (local machine)
 

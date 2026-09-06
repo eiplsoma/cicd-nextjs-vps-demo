@@ -36,3 +36,16 @@ Drop the Caddy container entirely. Instead:
   automated on this box) keep renewed.
 - The firewall story is simpler, not more complex: 80/443 stay owned by the
   one existing nginx process; nothing new needs opening for this project.
+- Certbot doesn't add security headers on its own — `X-Frame-Options`,
+  `X-Content-Type-Options`, `Referrer-Policy`, and `Strict-Transport-Security`
+  were added by hand to the server block afterward (a gap this ADR's original
+  version missed, since the Caddy plan it replaced had them and they didn't
+  get carried over). A reference copy of the full config, headers included,
+  is kept at `docs/nginx/cicd-demo.woollydesign.hu.conf` since nothing
+  deploys this file automatically.
+- The subdomain's DNS record was briefly proxied through Cloudflare to hide
+  the origin IP, then reverted to DNS-only after Cloudflare's bot mitigation
+  started returning 403 to the deploy pipeline's own smoke-test request. The
+  smoke test was moved to run from the VPS itself against `127.0.0.1:3001`
+  (never touching the public domain), which allows re-enabling the Cloudflare
+  proxy without that conflict — see the workflow's `deploy` job.

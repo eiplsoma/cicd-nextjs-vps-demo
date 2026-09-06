@@ -64,7 +64,7 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy over SSH
+      - name: Deploy over SSH and verify
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -77,8 +77,5 @@ jobs:
             docker compose pull
             docker compose up -d
             docker image prune -f
-
-      - name: Smoke test
-        run: |
-          sleep 5
-          curl -fsS https://cicd-demo.woollydesign.hu/api/health
+            sleep 5
+            curl -fsS http://127.0.0.1:3001/api/health
