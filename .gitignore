@@ -43,3 +43,6 @@ next-env.d.ts
 
 # internal planning workspace (not for the public repo — see docs/adr/ instead)
 docs/superpowers/
+
+# private working notes — known gaps/roadmap items not meant for the public repo
+docs/private/
