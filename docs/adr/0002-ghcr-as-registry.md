@@ -21,9 +21,10 @@ scoped to `read:packages` only, to pull images.
 - No extra registry account or secret needed for the push side — the
   built-in `GITHUB_TOKEN` already has permission once the workflow declares
   `permissions: packages: write`.
-- Images are versioned by commit SHA (`:<sha>`) as well as `:latest`,
-  giving a manual rollback path (re-run deploy against an older tag) even
-  though this project has no automatic rollback (see ADR 0004).
+- Images are versioned by commit SHA (`:<sha>`) as well as `:latest`, which
+  provides provenance and a manual recovery path (SSH into the VPS and run
+  `docker compose pull ghcr.io/eiplsoma/cicd-nextjs-vps-demo:<sha> && ...` by
+  hand), even though this project has no automated rollback (see ADR 0004).
 - The VPS's pull-side credential (`GHCR_TOKEN`) is deliberately narrower
   than the CI push-side credential — it can only read packages, never
   push or manage them.

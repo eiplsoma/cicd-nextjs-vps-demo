@@ -30,7 +30,7 @@ git push -u origin main
 | `VPS_SSH_KEY` | the *private* key generated in step 3 |
 | `GHCR_TOKEN` | a classic PAT, scope `read:packages` only |
 
-## 3. VPS one-time setup (Termius, on the VPS)
+## 3. VPS one-time setup (Termius, on the VPS — using your existing SSH access)
 
 ```bash
 # Docker + Compose plugin
@@ -51,23 +51,35 @@ sudo mkdir -p /opt/cicd-demo
 sudo chown deploy:deploy /opt/cicd-demo
 ```
 
-On your **local machine**, generate a deploy-only key pair and install the
-public half on the VPS:
+On your **local machine**, generate a deploy-only key pair:
 
 ```bash
 ssh-keygen -t ed25519 -f ./cicd_deploy_key -C "github-actions-deploy" -N ""
-scp ./cicd_deploy_key.pub deploy@<VPS_HOST>:/home/deploy/temp_key.pub
-ssh deploy@<VPS_HOST> "mkdir -p ~/.ssh && cat ~/temp_key.pub >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys && rm ~/temp_key.pub"
+cat ./cicd_deploy_key.pub
+```
+
+Copy the printed public key. Back in your **existing Termius (sudo) session on the
+VPS** — not a new login as `deploy`, which has no password and no key yet —
+install it:
+
+```bash
+sudo mkdir -p /home/deploy/.ssh
+echo "PASTE_THE_PUBLIC_KEY_HERE" | sudo tee -a /home/deploy/.ssh/authorized_keys
+sudo chown -R deploy:deploy /home/deploy/.ssh
+sudo chmod 700 /home/deploy/.ssh
+sudo chmod 600 /home/deploy/.ssh/authorized_keys
 ```
 
 Paste the contents of `./cicd_deploy_key` (the private half) into the
-`VPS_SSH_KEY` GitHub secret, then delete both local key files.
+`VPS_SSH_KEY` GitHub secret.
 
-Copy the compose files to the VPS:
+Now that `deploy` accepts the new key, copy the compose files to the VPS using it:
 
 ```bash
-scp docker-compose.yml Caddyfile deploy@<VPS_HOST>:/opt/cicd-demo/
+scp -i ./cicd_deploy_key docker-compose.yml Caddyfile deploy@<VPS_HOST>:/opt/cicd-demo/
 ```
+
+Then delete both local key files (`cicd_deploy_key` and `cicd_deploy_key.pub`).
 
 ## 4. DNS (domain registrar / DNS provider for woollydesign.hu)
 
@@ -75,7 +87,20 @@ Add an A record:
 - Name: `cicd-demo`
 - Value: `<VPS_HOST>` (the VPS's public IPv4)
 
-## 5. First deploy (local machine)
+## 5. Trigger the deploy (local machine)
+
+If step 1's repo creation already pushed your code, the very first workflow
+run already happened and failed at the `deploy` job — that's expected, since
+secrets and the VPS weren't ready yet. Now that they are, re-run it instead of
+pushing again:
+
+```bash
+gh run list --workflow=ci-cd.yml --limit 1
+gh run rerun --failed <run-id-from-above>
+gh run watch
+```
+
+If nothing has been pushed yet, trigger the first run normally:
 
 ```bash
 git push origin main

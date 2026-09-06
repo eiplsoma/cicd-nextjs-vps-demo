@@ -54,6 +54,8 @@ npm run test
 
 ## Building the container locally
 
+Run this in Git Bash or WSL — the `$(...)` command substitution isn't valid PowerShell syntax.
+
 ```bash
 docker build \
   --build-arg GIT_SHA=$(git rev-parse --short HEAD) \

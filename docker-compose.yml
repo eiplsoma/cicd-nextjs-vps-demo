@@ -1,3 +1,5 @@
+# Reference copy — editing this file has no effect on the running stack until
+# it's copied to /opt/cicd-demo on the VPS (see docs/RUNBOOK.md).
 services:
   app:
     image: ghcr.io/eiplsoma/cicd-nextjs-vps-demo:latest
@@ -14,6 +16,8 @@ services:
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
+      - caddy_config:/config
 
 volumes:
   caddy_data:
+  caddy_config:
