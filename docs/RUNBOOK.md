@@ -4,48 +4,62 @@ One-time steps to take this repo from "code on disk" to "live pipeline."
 Each step notes where it runs. DNS is done early (step 3) so it has time to
 propagate before the TLS certificate is requested in step 4.
 
-## 1. Create the GitHub repo (local machine)
+`<YOUR_DOMAIN>` below stands for whatever subdomain you point at your own
+VPS (e.g. `cicd-demo.example.com`) — this project's own live instance uses
+`cicd-demo.woollydesign.hu`, but that domain belongs to its author, not to
+anyone reproducing this repo. Bring your own domain and VPS.
+
+## 1. Create the GitHub repo
+
+Local machine:
 
 ```bash
 gh repo create eiplsoma/cicd-nextjs-vps-demo --public --source=. --remote=origin
 ```
 
 If `gh` isn't installed or authenticated, create the repo manually at
-https://github.com/new (owner `eiplsoma`, name `cicd-nextjs-vps-demo`, public,
-do **not** initialize with a README/.gitignore/license — this repo already has
-them), then:
+https://github.com/new, skipping the README/.gitignore/license init — this
+repo already has them — then:
 
 ```bash
-git remote add origin git@github.com:eiplsoma/cicd-nextjs-vps-demo.git
+git remote add origin git@github.com:<your-username>/cicd-nextjs-vps-demo.git
 git branch -M main
 git push -u origin main
 ```
 
-## 2. Add GitHub Actions secrets (github.com, repo Settings → Secrets and
-   variables → Actions)
+## 2. Add GitHub Actions secrets
+
+github.com, repo Settings → Secrets and variables → Actions:
 
 | Secret | Value |
 | --- | --- |
 | `VPS_HOST` | your VPS's public IP or hostname |
 | `VPS_USER` | `deploy` (created in step 4) |
-| `VPS_SSH_KEY` | the *private* key generated in step 4 |
+| `VPS_SSH_KEY` | the private key generated in step 4 |
 | `GHCR_TOKEN` | a classic PAT, scope `read:packages` only |
 
-## 3. DNS (domain registrar / DNS provider for woollydesign.hu)
+## 3. DNS
 
-Add an A record:
-- Name: `cicd-demo`
+At your own domain registrar / DNS provider. Add an A record:
+- Name: the subdomain part of `<YOUR_DOMAIN>` (e.g. `cicd-demo`)
 - Value: `<VPS_HOST>` (the VPS's public IPv4)
+- Proxy status: DNS only at first, if your provider offers one (e.g.
+  Cloudflare) — turn on proxying later, after step 5's deploy job has run
+  once with its health check hitting the VPS directly (`127.0.0.1`), not
+  the public domain. Proxying before that can make bot-protection reject
+  the pipeline's own request.
 
 DNS propagation can take a few minutes to a few hours — step 4's certbot
 invocation will fail if it hasn't propagated yet, so it's fine to start this
-step and come back to step 4 a bit later.
+step and come back to step 4 later.
 
-## 4. VPS one-time setup (Termius, on the VPS — using your existing SSH access)
+## 4. VPS one-time setup
 
-This VPS is shared with other projects — it already runs nginx bound to
-80/443 and may already have Docker installed. Check before assuming a clean
-slate (see [ADR 0005](adr/0005-nginx-instead-of-caddy.md)).
+Termius, on the VPS, using your existing SSH access. If the VPS is shared
+with other projects, it may already run nginx bound to 80/443 and already
+have Docker installed — check before assuming a clean slate (see
+[ADR 0005](adr/0005-nginx-instead-of-caddy.md), written for the case where
+it is).
 
 ```bash
 # Docker + Compose plugin (skip if `docker --version` already works)
@@ -55,7 +69,7 @@ curl -fsSL https://get.docker.com | sh
 sudo adduser --disabled-password --gecos "" deploy
 sudo usermod -aG docker deploy
 
-# check the firewall before touching it — this VPS likely already has
+# check the firewall before touching it — a shared VPS likely already has
 # 22/80/443 open for its other sites; only add what's actually missing
 sudo ufw status verbose
 
@@ -64,16 +78,16 @@ sudo mkdir -p /opt/cicd-demo
 sudo chown deploy:deploy /opt/cicd-demo
 ```
 
-On your **local machine**, generate a deploy-only key pair:
+Generate a deploy-only key pair, on your local machine:
 
 ```bash
 ssh-keygen -t ed25519 -f ./cicd_deploy_key -C "github-actions-deploy" -N ""
 cat ./cicd_deploy_key.pub
 ```
 
-Copy the printed public key. Back in your **existing Termius (sudo) session on the
-VPS** — not a new login as `deploy`, which has no password and no key yet —
-install it:
+Copy the printed public key. Back in the existing sudo session on the VPS —
+not a new login as `deploy`, which has no password and no key yet — install
+it:
 
 ```bash
 sudo mkdir -p /home/deploy/.ssh
@@ -86,21 +100,22 @@ sudo chmod 600 /home/deploy/.ssh/authorized_keys
 Paste the contents of `./cicd_deploy_key` (the private half) into the
 `VPS_SSH_KEY` GitHub secret.
 
-Now that `deploy` accepts the new key, copy the compose file to the VPS using it:
+`deploy` now accepts the new key — copy the compose file to the VPS with it:
 
 ```bash
 scp -i ./cicd_deploy_key docker-compose.yml deploy@<VPS_HOST>:/opt/cicd-demo/
 ```
 
-Then delete both local key files (`cicd_deploy_key` and `cicd_deploy_key.pub`).
+Delete both local key files (`cicd_deploy_key` and `cicd_deploy_key.pub`)
+once that's done.
 
-Add an nginx server block for the subdomain (as root/sudo on the VPS):
+Add an nginx server block for `<YOUR_DOMAIN>`, as root/sudo on the VPS:
 
 ```bash
-sudo tee /etc/nginx/sites-available/cicd-demo.woollydesign.hu > /dev/null <<'EOF'
+sudo tee /etc/nginx/sites-available/<YOUR_DOMAIN> > /dev/null <<'EOF'
 server {
     listen 80;
-    server_name cicd-demo.woollydesign.hu;
+    server_name <YOUR_DOMAIN>;
 
     location / {
         add_header X-Frame-Options "DENY" always;
@@ -115,31 +130,34 @@ server {
     }
 }
 EOF
-sudo ln -s /etc/nginx/sites-available/cicd-demo.woollydesign.hu /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/<YOUR_DOMAIN> /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
 Once DNS (step 3) has propagated, get a certificate — certbot's nginx plugin
-edits the server block above in place to add TLS and the HTTP→HTTPS redirect.
-Add `Strict-Transport-Security` (HSTS) only after this, directly to
-`/etc/nginx/sites-available/cicd-demo.woollydesign.hu`'s HTTPS (`listen 443
-ssl`) block — HSTS only makes sense once HTTPS actually exists, and Certbot
-doesn't add it for you:
+edits the server block above in place to add TLS and the HTTP→HTTPS redirect:
 
 ```bash
-sudo certbot --nginx -d cicd-demo.woollydesign.hu
+sudo certbot --nginx -d <YOUR_DOMAIN>
 ```
 
-A copy of the resulting config, with all four headers, is kept for reference
-at [`docs/nginx/cicd-demo.woollydesign.hu.conf`](nginx/cicd-demo.woollydesign.hu.conf) —
-it's not deployed by anything automatically, but keeps the live VPS config
-reproducible instead of existing only as an undocumented manual change.
+Add `Strict-Transport-Security` (HSTS) afterward, directly to the same
+file's HTTPS (`listen 443 ssl`) block — HSTS only makes sense once HTTPS
+exists, and certbot doesn't add it on its own.
 
-## 5. Trigger the deploy (local machine)
+A copy of this project's own resulting config, with all four headers, is
+kept for reference at
+[`docs/nginx/cicd-demo.woollydesign.hu.conf`](nginx/cicd-demo.woollydesign.hu.conf) —
+useful as a worked example, not something to deploy verbatim onto a
+different domain. Nothing deploys it automatically either way; it just
+keeps this project's own live VPS config reproducible instead of existing
+only as an undocumented manual change.
 
-If step 1's repo creation already pushed your code, the very first workflow
-run already happened and failed at the `deploy` job — that's expected, since
-secrets and the VPS weren't ready yet. Now that they are, re-run it instead of
+## 5. Trigger the deploy
+
+Local machine. If step 1's repo creation already pushed your code, the very
+first workflow run already happened and failed at the `deploy` job — that's
+expected, since secrets and the VPS weren't ready yet. Re-run it instead of
 pushing again:
 
 ```bash
@@ -158,9 +176,12 @@ gh run watch
 ## 6. Verify
 
 ```bash
-curl -fsS https://cicd-demo.woollydesign.hu/api/health
+curl -fsS https://<YOUR_DOMAIN>/api/health
 ```
 Expected: `{"status":"ok"}`.
 
-Open https://cicd-demo.woollydesign.hu and confirm the displayed Git SHA
-matches `git rev-parse --short HEAD` for the commit you just pushed.
+Open `https://<YOUR_DOMAIN>` and confirm the displayed Git SHA matches
+`git rev-parse --short HEAD` for the commit you just pushed. Once this
+passes, it's safe to switch the DNS record from step 3 to proxied (if your
+provider offers it) — the deploy job's health check never touches the
+public domain, so a proxy in front of it won't interfere.
