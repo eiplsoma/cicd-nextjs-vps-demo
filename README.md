@@ -74,15 +74,15 @@ docker run --rm -p 3000:3000 cicd-nextjs-vps-demo:local
 Full one-time setup (repo creation, VPS provisioning, DNS, first deploy) is in
 [`docs/RUNBOOK.md`](docs/RUNBOOK.md).
 
-## Out of scope (by design — see the spec)
+## Out of scope, on purpose
 
-- Automatic rollback on failed smoke test
-- Staging environment / PR preview deploys
-- Watchtower or other pull-based auto-update agents
+No automatic rollback, no staging environment or PR preview deploys, no
+Watchtower or other pull-based auto-update agent alongside the push-based
+deploy. Reasoning for each of these is in `docs/adr/`.
 
-## Possible future work
+## Possible next steps
 
-- Roll back to the previous tag automatically if the post-deploy smoke test fails.
-- Add a staging environment with PR-based preview deploys.
-- Try Traefik as an alternative to Caddy (Docker-label-driven config).
+- Roll back to the previous image tag automatically if the smoke test fails.
+- Staging environment with PR-based preview deploys.
+- Traefik instead of Caddy (Docker-label-driven config).
 - Dependabot/Renovate for dependency updates.
