@@ -116,6 +116,7 @@ sudo tee /etc/nginx/sites-available/<YOUR_DOMAIN> > /dev/null <<'EOF'
 server {
     listen 80;
     server_name <YOUR_DOMAIN>;
+    server_tokens off;
 
     location / {
         add_header X-Frame-Options "DENY" always;
