@@ -1,14 +1,24 @@
 # Reference copy — editing this file has no effect on the running stack until
-# it's copied to /opt/cicd-demo on the VPS (see docs/RUNBOOK.md).
+# it's copied to /opt/cicd-demo on the Netcup VPS (see docs/RUNBOOK.md).
 #
-# No reverse proxy service here: the VPS already runs nginx for other sites,
-# bound to 80/443. TLS termination and the cicd-demo.woollydesign.hu vhost are
-# handled by that existing nginx (see docs/adr/0005-nginx-instead-of-caddy.md).
-# The app is bound only to localhost so nothing but that local nginx can reach
-# it directly.
+# No reverse proxy service here: the VPS runs a shared, dockerized nginx
+# proxy (in /home/deploy/proxy) that terminates TLS and enforces Cloudflare-IP
+# allowlisting + Authenticated Origin Pulls for every site on the box,
+# cicd-demo included. The `web` network below is that proxy's network, so it
+# can reach this container by name. The 127.0.0.1 port mapping stays for the
+# deploy script's own health check, which intentionally never goes through
+# the public domain/Cloudflare (see docs/adr/0005-nginx-instead-of-caddy.md
+# for why the health check has to stay local).
 services:
   app:
     image: ghcr.io/eiplsoma/cicd-nextjs-vps-demo:latest
+    container_name: cicd-demo-app
     restart: unless-stopped
     ports:
       - "127.0.0.1:3001:3000"
+    networks:
+      - web
+
+networks:
+  web:
+    external: true
