@@ -5,9 +5,15 @@ Each step notes where it runs. DNS is done early (step 3) so it has time to
 propagate before the TLS certificate is requested in step 4.
 
 `<YOUR_DOMAIN>` below stands for whatever subdomain you point at your own
-VPS (e.g. `cicd-demo.example.com`) — this project's own live instance uses
-`cicd-demo.woollydesign.hu`, but that domain belongs to its author, not to
-anyone reproducing this repo. Bring your own domain and VPS.
+VPS (e.g. `cicd-demo.example.com`) — bring your own domain and VPS.
+
+This runbook describes the simplest version of the setup (direct SSH,
+certbot-managed TLS) as a reproducible starting point. The author's own live
+instance has since evolved past it — a different VPS, reached over a
+Cloudflare Tunnel with a forced-command SSH key, behind an existing
+dockerized reverse proxy — see `docs/adr/0006-migrate-to-netcup-cloudflare-tunnel.md`
+for why and how. That evolution isn't a prerequisite for following the
+steps below.
 
 ## 1. Create the GitHub repo
 
