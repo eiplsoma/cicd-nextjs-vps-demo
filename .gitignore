@@ -46,3 +46,6 @@ docs/superpowers/
 
 # private working notes — known gaps/roadmap items not meant for the public repo
 docs/private/
+
+# local AI-agent instructions — not meant for the public repo
+CLAUDE.md
