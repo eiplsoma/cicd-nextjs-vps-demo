@@ -65,24 +65,38 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - name: Deploy over SSH and verify
-        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script_stop: true
-          script: |
-            cd /opt/cicd-demo
-            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
-            docker compose pull
-            docker compose up -d
-            docker image prune -f
-            for i in $(seq 1 10); do
-              if curl -fsS http://127.0.0.1:3001/api/health; then
-                exit 0
-              fi
-              sleep 2
-            done
-            echo "Health check failed after 10 attempts (20s)" >&2
-            exit 1
+      - name: Install cloudflared
+        env:
+          CLOUDFLARED_VERSION: "2026.9.1"
+          CLOUDFLARED_SHA256: "03f1f25d1cc93b9ad6c60569d44060bc4f17ed97075760ed8cfca4b12dcd68cc"
+        run: |
+          curl -fsSL -o cloudflared "https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-amd64"
+          echo "${CLOUDFLARED_SHA256}  cloudflared" | sha256sum -c -
+          chmod +x cloudflared
+          sudo mv cloudflared /usr/local/bin/cloudflared
+
+      - name: Deploy over SSH via Cloudflare Tunnel
+        # ci-deploy.eiplsoma.hu has no Cloudflare Access application attached
+        # (unlike the human-facing ssh.eiplsoma.hu) — Access Service Tokens
+        # are not usable here because `cloudflared access ssh`/`access tcp`
+        # ignores service-token credentials and falls back to interactive
+        # browser auth (cloudflare/cloudflared#1673), which cannot work
+        # headless in CI. The tunnel only avoids exposing port 22 publicly;
+        # the actual access control is the forced-command SSH key itself,
+        # same as the personal_site deploy pipeline already does.
+        run: |
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "ci-deploy.eiplsoma.hu ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJMaOYsuKBX5ds4PtTwoayoSsvk7ggIaMJ8eWchJZb3l" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host vps-deploy
+            HostName ci-deploy.eiplsoma.hu
+            User ${{ secrets.VPS_USER }}
+            IdentityFile ~/.ssh/deploy_key
+            ProxyCommand cloudflared access ssh --hostname %h
+            StrictHostKeyChecking yes
+          EOF
+          chmod 600 ~/.ssh/config
+          ssh vps-deploy
