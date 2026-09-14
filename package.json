@@ -1,6 +1,7 @@
 {
   "name": "cicd-nextjs-vps-demo",
   "version": "0.1.0",
+  "description": "Next.js app deployed via a multi-job GitHub Actions pipeline to a self-hosted VPS over a Cloudflare Tunnel.",
   "private": true,
   "engines": {
     "node": ">=24"
